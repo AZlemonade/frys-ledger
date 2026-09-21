@@ -1,4 +1,4 @@
-/* Fry's Ledger warehouse count upload v1.0 — AZ Lemonade Stand.
+/* Fry's Ledger warehouse count upload v1.1 — AZ Lemonade Stand.
    Takes a pasted or uploaded sheet of warehouse stock and writes it to the ledger, either as an
    opening transfer in (no variance) or as a full recount (variance against the book). */
 (function () {
@@ -54,6 +54,7 @@
   const uuid = () => (crypto.randomUUID ? crypto.randomUUID()
     : 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, c => { const r = Math.random() * 16 | 0; return (c === 'x' ? r : (r & 3 | 8)).toString(16); }));
   const norm = s => String(s == null ? '' : s).toLowerCase().replace(/[^a-z0-9]/g, '');
+  const dez = s => s.replace(/(\d+)oz/g, '$1');   // the sheets say 32oz, the SKU list says 32
   const digits = s => String(s == null ? '' : s).replace(/\D/g, '');
 
   // ---------- load ----------
@@ -123,8 +124,9 @@
     const put = (k, sku) => { if (k && !(k in index)) index[k] = sku; };
     S.skus.forEach(s => {
       put(norm(s.sku_id), s.sku_id);
+      put(dez(norm(s.sku_id)), s.sku_id);
       put(norm(s.name), s.sku_id);
-      put(norm(s.name).replace(/^(\d+)oz/, '$1'), s.sku_id);
+      put(dez(norm(s.name)), s.sku_id);
     });
     S.barcodes.forEach(b => put(digits(b.code), b.sku_id));
   }
@@ -132,15 +134,24 @@
     if (!index) buildIndex();
     const raw = String(cell == null ? '' : cell).trim();
     if (!raw) return null;
-    const n = norm(raw);
+    const n0 = norm(raw), n = dez(n0);
+    if (index[n0]) return index[n0];
     if (index[n]) return index[n];
     const d = digits(raw);
     if (d.length >= 11 && index[d]) return index[d];
-    // last resort: the sheet says "32oz Original Lemonade" and the SKU is "32oz Original"
+    if (n.length < 4) return null;
+    // the sheet says "32oz Strawberry Lemonade 12pk" and the SKU list says "32 Strawberry"
     let hit = null, best = 0;
     for (const s of S.skus) {
-      const sn = norm(s.name);
-      if (sn && (n.indexOf(sn) === 0 || sn.indexOf(n) === 0) && sn.length > best) { hit = s.sku_id; best = sn.length; }
+      const sn = dez(norm(s.name));
+      if (sn && sn.length >= 4 && n.indexOf(sn) === 0 && sn.length > best) { hit = s.sku_id; best = sn.length; }
+    }
+    if (hit) return hit;
+    // or the sheet is the short one: "32 Straw" against "32 Strawberry". Take the shortest fit.
+    best = Infinity;
+    for (const s of S.skus) {
+      const sn = dez(norm(s.name));
+      if (sn && sn.indexOf(n) === 0 && sn.length < best) { hit = s.sku_id; best = sn.length; }
     }
     return hit;
   }
