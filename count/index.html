@@ -1,0 +1,166 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Warehouse count upload</title>
+<link rel="icon" href="../icon-192.png">
+<style>
+:root{--paper:#F7F6F2;--paper-2:#EFEDE6;--card:#fff;--ink:#1E1B1C;--ink-2:#4B4548;--ink-3:#7A7275;--line:#D8D3CC;--accent:#A8215E;--accent-soft:#F3DCE6;--good:#2E7D4F;--good-soft:#DCEDE3;--crit:#B3261E;--crit-soft:#F8DAD7;--warn:#B7770F;--warn-soft:#FBEBCF}
+*{box-sizing:border-box}
+html,body{margin:0;background:var(--paper);color:var(--ink);font-family:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;font-size:15px;line-height:1.45}
+header.top{position:sticky;top:0;z-index:10;background:var(--paper);border-bottom:1px solid var(--line);padding:12px 20px;display:flex;flex-wrap:wrap;gap:12px;align-items:baseline;justify-content:space-between}
+header.top h1{font-size:19px;margin:0}
+header.top .meta{font-size:13px;color:var(--ink-3)}
+main{max-width:1000px;margin:0 auto;padding:18px 20px 80px}
+.login{max-width:380px;margin:80px auto;padding:0 20px}
+.login .brand{font-size:12px;letter-spacing:.08em;text-transform:uppercase;color:var(--accent)}
+.login h2{margin:4px 0 4px;font-size:24px}
+.sub{color:var(--ink-3);font-size:14px;margin-bottom:14px}
+input.text{width:100%;font:inherit;padding:10px 12px;border:1px solid var(--line);border-radius:10px;background:#fff;margin:6px 0}
+.btn{border:0;background:var(--accent);color:#fff;font:inherit;font-weight:600;border-radius:10px;padding:10px 16px;cursor:pointer}
+.btn.quiet{background:var(--paper-2);color:var(--ink)}
+.btn.small{padding:6px 12px;font-size:13px}
+.btn:disabled{opacity:.45;cursor:default}
+section{margin-bottom:26px}
+h2.sec{font-size:17px;margin:0 0 2px}
+p.note{color:var(--ink-3);font-size:13px;margin:0 0 12px}
+.step{font-size:11px;letter-spacing:.06em;text-transform:uppercase;color:var(--accent);font-weight:600;margin-bottom:2px}
+.card{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:14px 16px}
+.bar{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+select,input[type=text]{font:inherit;padding:8px 11px;border:1px solid var(--line);border-radius:9px;background:#fff;color:inherit}
+textarea{width:100%;font:13px/1.5 ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;padding:10px 12px;border:1px solid var(--line);border-radius:10px;background:#fff;resize:vertical;color:inherit}
+.modes{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px}
+.mode{flex:1;min-width:230px;text-align:left;border:1px solid var(--line);background:var(--card);border-radius:12px;padding:11px 13px;cursor:pointer;font:inherit;color:inherit}
+.mode.on{border-color:var(--accent);background:var(--accent-soft)}
+.mode b{display:block;font-size:14px}
+.mode small{color:var(--ink-3);font-size:12px;line-height:1.35;display:block;margin-top:2px}
+.mode.on small{color:var(--ink-2)}
+.tiles{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px;margin:12px 0}
+.tile{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:12px 14px}
+.tile .lab{font-size:11px;letter-spacing:.06em;text-transform:uppercase;color:var(--ink-3)}
+.tile .val{font-size:23px;font-weight:700;font-variant-numeric:tabular-nums;line-height:1.2;margin-top:2px}
+.tile .sub2{font-size:12px;color:var(--ink-3);font-variant-numeric:tabular-nums}
+.wrap{overflow-x:auto;background:var(--card);border:1px solid var(--line);border-radius:12px}
+table{border-collapse:collapse;width:100%;font-size:14px}
+th,td{padding:8px 12px;text-align:left;border-bottom:1px solid var(--line);white-space:nowrap}
+th{font-size:11px;letter-spacing:.05em;text-transform:uppercase;color:var(--ink-3);font-weight:600}
+th.num,td.num{text-align:right;font-variant-numeric:tabular-nums}
+tbody tr:last-child td{border-bottom:0}
+tfoot td{font-weight:700;font-variant-numeric:tabular-nums;background:var(--paper-2)}
+tr.bad td{background:var(--crit-soft)}
+tr.zero td{background:var(--warn-soft)}
+td.raw{font:12px ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;color:var(--ink-3);max-width:230px;overflow:hidden;text-overflow:ellipsis}
+.neg{color:var(--crit)}
+.pos{color:var(--good)}
+.pill{display:inline-block;font-size:11px;padding:1px 7px;border-radius:999px;background:var(--paper-2);color:var(--ink-2)}
+.pill.bad{background:var(--crit-soft);color:var(--crit)}
+.pill.warnp{background:var(--warn-soft);color:var(--warn)}
+.msg{margin:10px 0;padding:10px 12px;border-radius:10px;font-size:14px}
+.msg.err{background:var(--crit-soft);color:var(--crit)}
+.msg.ok{background:var(--good-soft);color:var(--good)}
+.msg.warn{background:var(--warn-soft);color:var(--warn)}
+.hide{display:none}
+footer{color:var(--ink-3);font-size:12px;padding:10px 20px 40px;max-width:1000px;margin:0 auto}
+@media (max-width:640px){ main{padding:14px} }
+</style>
+</head>
+<body>
+
+<div id="login" class="login">
+  <div class="brand">AZ Lemonade Stand</div>
+  <h2>Warehouse count upload</h2>
+  <p class="sub">Same email and password as the merchandiser app.</p>
+  <input class="text" id="login-email" type="email" autocomplete="username" placeholder="you@example.com">
+  <input class="text" id="login-password" type="password" autocomplete="current-password" placeholder="Password">
+  <button class="btn" id="login-signin" style="width:100%">Sign in</button>
+  <div id="login-msg"></div>
+</div>
+
+<div id="app" style="display:none">
+<header class="top">
+  <div>
+    <h1>Warehouse count upload</h1>
+    <div class="meta" id="who">loading…</div>
+  </div>
+  <div>
+    <a class="btn quiet small" href="../report/" style="text-decoration:none;display:inline-block">Report</a>
+    <button class="btn quiet small" id="signout">Sign out</button>
+  </div>
+</header>
+<main>
+
+<div id="denied" class="msg err hide"></div>
+
+<div id="work" class="hide">
+
+<section>
+  <div class="step">Step 1</div>
+  <h2 class="sec">Which warehouse</h2>
+  <p class="note">The book balance loads so the page can tell an opening load from a recount.</p>
+  <div class="bar">
+    <select id="loc"></select>
+    <span id="loc-state" class="pill">…</span>
+  </div>
+</section>
+
+<section>
+  <div class="step">Step 2</div>
+  <h2 class="sec">What this upload is</h2>
+  <div class="modes">
+    <button class="mode" id="m-open" data-mode="open">
+      <b>Opening balance</b>
+      <small>Writes the stock in as a transfer from Dunlap / STEM. Use this the first time a warehouse goes on the ledger. No variance.</small>
+    </button>
+    <button class="mode" id="m-count" data-mode="count">
+      <b>Recount</b>
+      <small>Compares every SKU to the book and writes the difference as variance. Use this at month-end. Counts as a full count of the warehouse.</small>
+    </button>
+  </div>
+  <div id="mode-note" class="msg warn hide"></div>
+</section>
+
+<section>
+  <div class="step">Step 3</div>
+  <h2 class="sec">Paste the sheet</h2>
+  <p class="note">Copy the rows out of Excel and paste them here, or load a CSV. A header row is fine. Columns can be in any order: the page looks for a SKU or product name, then cases, then loose units.</p>
+  <textarea id="paste" rows="8" placeholder="32-OG&#9;40&#9;0&#10;32oz Strawberry&#9;12&#9;6&#10;850011912799&#9;5"></textarea>
+  <div class="bar" style="margin-top:8px">
+    <input type="file" id="file" accept=".csv,.tsv,.txt" style="display:none">
+    <button class="btn quiet small" id="pick-file">Load a CSV</button>
+    <button class="btn quiet small" id="template">Download a blank template</button>
+    <button class="btn quiet small" id="clear">Clear</button>
+    <span class="note" style="margin:0" id="parse-state"></span>
+  </div>
+</section>
+
+<section id="review" class="hide">
+  <div class="step">Step 4</div>
+  <h2 class="sec">Check it</h2>
+  <p class="note" id="review-note"></p>
+  <div class="tiles" id="tiles"></div>
+  <div id="warnings"></div>
+  <div class="wrap"><table id="t-lines"><thead id="lines-head"></thead><tbody></tbody><tfoot></tfoot></table></div>
+</section>
+
+<section id="post-sec" class="hide">
+  <div class="step">Step 5</div>
+  <h2 class="sec">Post it</h2>
+  <p class="note">Nothing is written until you press this. It cannot be undone from here, only corrected with another count.</p>
+  <input class="text" id="note" type="text" placeholder="Note for the ledger, for example: physical count 9/21, counted by Jay">
+  <div class="bar" style="margin-top:8px">
+    <button class="btn" id="post" disabled>Post to the ledger</button>
+    <span class="note" style="margin:0" id="post-state"></span>
+  </div>
+  <div id="post-msg"></div>
+</section>
+
+</div>
+</main>
+<footer>Writes to the azls-frys-ledger movement log with your own sign-in, so every row carries your name. Balances are never stored; they are worked out from the movement rows.</footer>
+</div>
+
+<script src="../config.js"></script>
+<script src="upload.js"></script>
+</body>
+</html>
