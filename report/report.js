@@ -1,4 +1,4 @@
-/* Fry's Ledger inventory report v1.0 — AZ Lemonade Stand.
+/* Fry's Ledger inventory report v1.1 — AZ Lemonade Stand.
    Reads the azls-frys-ledger views over the Supabase REST API. Read only. */
 (function () {
   'use strict';
@@ -94,8 +94,8 @@
 
     $('#asof').textContent = 'As of ' + new Date().toLocaleString() + ' · signed in as ' + email();
     $('#tiles').innerHTML = [
-      tile('Inventory at cost', money(totalValue), num(S.rows.reduce((a, r) => a + r.units, 0)) + ' units across ' + S.rows.length + ' locations'),
-      tile('On consignment in stores', money(storeValue), stores.length + ' stores holding stock'),
+      tile('Inventory at cost', money(totalValue), num(S.rows.reduce((a, r) => a + r.units, 0)) + ' units across ' + S.rows.filter(r => r.units !== 0).length + ' locations holding stock'),
+      tile('On consignment in stores', money(storeValue), stores.filter(r => r.units !== 0).length + ' of ' + stores.length + ' stores holding stock'),
       tile('Shrink since opening', money(shrinkValue), num(shrinkUnits) + ' units over ' + S.shrink.length + ' adjustments'),
       tile('Counts', counted + ' of ' + stores.length, stale + ' not counted in 30 days')
     ].join('');
@@ -127,7 +127,8 @@
   function storeRows() {
     const q = ($('#q-stores').value || '').toLowerCase().trim();
     const route = $('#f-route').value, type = $('#f-type').value;
-    let rows = S.rows.filter(r => (!type || r.type === type) && (!route || r.route === route));
+    const empties = $('#f-empty').value === 'all';
+    let rows = S.rows.filter(r => (!type || r.type === type) && (!route || r.route === route) && (empties || r.units !== 0));
     if (q) rows = rows.filter(r => (r.store + ' ' + r.name + ' ' + r.city + ' ' + r.merch + ' ' + r.route).toLowerCase().includes(q));
     const s = S.sort.stores;
     return rows.sort((a, b) => {
@@ -147,7 +148,7 @@
     });
     fill('#t-stores', html,
       `<tr><td colspan="4">${rows.length} location${rows.length === 1 ? '' : 's'}</td><td class="num">${num(rows.reduce((a, r) => a + r.units, 0))}</td><td class="num">${cases(rows.reduce((a, r) => a + r.cases, 0))}</td><td class="num">${money2(rows.reduce((a, r) => a + r.value, 0))}</td><td></td><td></td></tr>`,
-      'No stock at these locations yet. It shows up here as soon as the first drop is logged.');
+      'Nothing with stock here. Switch to "Empty locations too" to see every location, or wait for the first drop.');
   }
 
   function shrinkGroups() {
@@ -220,6 +221,7 @@
   $('#q-stores').oninput = renderStores;
   $('#f-route').onchange = renderStores;
   $('#f-type').onchange = renderStores;
+  $('#f-empty').onchange = renderStores;
   $('#f-shrink').onchange = renderShrink;
   $$('[data-csv]').forEach(b => b.onclick = () => download(b.dataset.csv));
   $('#refresh').onclick = async () => { $('#refresh').disabled = true; try { await load(); } catch (e) { alertErr(e); } $('#refresh').disabled = false; };
