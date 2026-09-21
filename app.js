@@ -1,4 +1,4 @@
-/* Fry's Ledger v0.3 — AZ Lemonade Stand consignment app.
+/* Fry's Ledger v0.4 — AZ Lemonade Stand consignment app.
    Plain JS, no framework. Talks to Supabase over REST. Works offline with an outbox. */
 (function () {
   'use strict';
@@ -20,6 +20,7 @@
     session: LS.get('session', null),   // {access_token, refresh_token, expires_at, user:{email}}
     me: LS.get('me', null),             // people row
     skus: LS.get('skus', []),
+    barcodes: LS.get('barcodes', []),   // [{code, sku_id, kind}] - what actually scans
     locations: LS.get('locations', []),
     balances: LS.get('balances', {}),   // {location_id: {sku_id: units}}
     masterAt: LS.get('masterAt', null),
@@ -98,13 +99,14 @@
 
   // ---------------- master data ----------------
   async function loadMaster() {
-    const [skus, locations, me] = await Promise.all([
+    const [skus, locations, me, barcodes] = await Promise.all([
       api('/rest/v1/skus?select=*&active=eq.true&order=category,name'),
       api('/rest/v1/locations?select=*&active=eq.true&order=type,route,name'),
-      api('/rest/v1/people?select=*&email=eq.' + encodeURIComponent((email() || '').toLowerCase()))
+      api('/rest/v1/people?select=*&email=eq.' + encodeURIComponent((email() || '').toLowerCase())),
+      api('/rest/v1/barcodes?select=code,sku_id,kind')
     ]);
-    S.skus = skus; S.locations = locations; S.me = me[0] || null; S.masterAt = nowIso();
-    LS.set('skus', skus); LS.set('locations', locations); LS.set('me', S.me); LS.set('masterAt', S.masterAt);
+    S.skus = skus; S.locations = locations; S.me = me[0] || null; S.barcodes = barcodes; S.masterAt = nowIso();
+    LS.set('skus', skus); LS.set('locations', locations); LS.set('me', S.me); LS.set('barcodes', barcodes); LS.set('masterAt', S.masterAt);
     if (!S.me) throw new Error('Your email is not on the People list yet. Ask Austin to add ' + email());
   }
   async function loadBalances(ids) {
@@ -128,12 +130,21 @@
     if (d.length === 13 && d[0] === '0') cands.add(d.slice(1));
     if (d.length === 12) cands.add('0' + d);
     if (d.length === 14) cands.add(d.slice(2));         // GTIN-14 -> 12-digit core (check digit differs; matched below)
+    for (const b of S.barcodes) { if (cands.has(b.code)) { const s = sku(b.sku_id); if (s) return s; } }
     for (const s of S.skus) {
       if (cands.has(s.unit_upc) || cands.has(s.case_gtin14)) return s;
       if (d.length === 14 && s.unit_upc && d.slice(2, 13) === s.unit_upc.slice(0, 11)) return s;
       if (d.length === 12 && s.case_gtin14 && s.case_gtin14.slice(2, 13) === d.slice(0, 11)) return s;
     }
     return null;
+  }
+  const canAssign = () => !!(S.me && (S.me.supervisor || /admin/i.test(S.me.role || '')));
+  async function assignCode(code, sk) {
+    const d = digits(code);
+    const row = { code: d, sku_id: sk.sku_id, kind: d.length >= 13 ? 'case' : 'unit', confirmed: true, added_by: email(), note: 'scanned in the app' };
+    S.barcodes.push(row); LS.set('barcodes', S.barcodes);
+    enqueue({ path: '/rest/v1/barcodes', method: 'POST', body: row, headers: { Prefer: 'return=minimal' } });
+    return d + ' is now ' + sk.name + ' (' + (row.kind === 'case' ? 'case' : 'bottle') + ')';
   }
   const scanner = {
     kind: (('BarcodeDetector' in window) ? 'native' : (window.Html5Qrcode ? 'lib' : 'none')),
@@ -262,7 +273,25 @@
       $('#le-hint').textContent = t; $('#le-add').disabled = units <= 0;
     };
     const setSku = s => { cur = s; $('#le-sku .val').textContent = s ? s.name : 'Tap to choose'; $('#le-upc').textContent = s ? s.units_per_case + '/cs' : ''; hint(); $('#le-cases').focus(); };
-    $('#le-scan').onclick = () => scanner.start($('#le-scan'), code => { const s = skuFromCode(code); if (s) { setSku(s); $('#le-scan').innerHTML = 'Scanned ' + code + ' · tap to scan again'; } else { $('#le-scan').innerHTML = 'Code ' + code + ' is not on the SKU list · tap to try again'; } });
+    const scanBox = $('#le-scan');
+    const onScanned = code => {
+      const s = skuFromCode(code);
+      if (s) { setSku(s); scanBox.innerHTML = 'Scanned ' + code + ' · tap to scan again'; return; }
+      if (!canAssign()) { scanBox.innerHTML = 'Code ' + code + ' is not on the list yet · tap the SKU row below to pick it, and send this code to Austin or Greyson'; return; }
+      scanBox.innerHTML = '<div style="padding:10px;text-align:center;font-size:14px">' + code + ' is not on the list yet.' +
+        '<button class="btn" id="le-assign" style="margin-top:8px">Say which product this is</button>' +
+        '<div class="hint">Or tap anywhere else here to scan again.</div></div>';
+      const btn = document.getElementById('le-assign');
+      btn.onclick = ev => {
+        ev.stopPropagation();
+        pickSku(async sk => {
+          const msg = await assignCode(code, sk);
+          setSku(sk);
+          scanBox.innerHTML = 'Saved. ' + msg + ' · tap to scan again';
+        }, 'which one is ' + code + '?');
+      };
+    };
+    scanBox.onclick = () => scanner.start(scanBox, onScanned);
     $('#le-sku').onclick = () => pickSku(setSku);
     $('#le-cases').oninput = hint; $('#le-each').oninput = hint;
     $('#le-add').onclick = () => {
@@ -392,7 +421,7 @@
   }
   function renderMore() {
     $('#more-email').textContent = email() || '';
-    $('#more-master').textContent = S.masterAt ? new Date(S.masterAt).toLocaleDateString() + ' · ' + S.skus.length + ' SKUs · ' + S.locations.filter(l => l.type === 'STORE').length + ' stores' : 'not loaded';
+    $('#more-master').textContent = S.masterAt ? new Date(S.masterAt).toLocaleDateString() + ' · ' + S.skus.length + ' SKUs · ' + S.locations.filter(l => l.type === 'STORE').length + ' stores · ' + S.barcodes.length + ' barcodes' : 'not loaded';
     $('#more-scanner').textContent = ({ native: 'camera (built in)', lib: 'camera (library)', none: 'not available' })[scanner.kind] + (window.Html5Qrcode ? '' : ' · library missing');
     updateSync();
     $('#more-refresh').onclick = async () => { try { await loadMaster(); await loadBalances([myVan()]); msg($('#s-more'), 'ok', 'Refreshed.'); renderMore(); } catch (e) { msg($('#s-more'), 'err', e.message); } };
