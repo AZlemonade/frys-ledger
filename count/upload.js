@@ -1,4 +1,4 @@
-/* Fry's Ledger warehouse count upload v1.1 — AZ Lemonade Stand.
+/* Fry's Ledger warehouse count upload v1.2 — AZ Lemonade Stand.
    Takes a pasted or uploaded sheet of warehouse stock and writes it to the ledger, either as an
    opening transfer in (no variance) or as a full recount (variance against the book). */
 (function () {
@@ -280,6 +280,8 @@
     const w = [];
     if (S.bad.length) w.push('<div class="msg err"><b>' + S.bad.length + ' row' + (S.bad.length > 1 ? 's' : '') + ' did not match a SKU</b> and will be left out. They are red in the table below. Fix the sheet and paste again, or leave them if they are subtotals or notes.</div>');
     if (missing.length) w.push('<div class="msg warn"><b>' + missing.length + ' SKU' + (missing.length > 1 ? 's are' : ' is') + ' on the book but not on your sheet.</b> A recount is a full count, so ' + (missing.length > 1 ? 'they' : 'it') + ' will be written down to zero. They are amber below. If you only counted part of the warehouse, stop and count the rest.</div>');
+    const negBook = S.lines.filter(l => l.book < 0);
+    if (S.mode === 'count' && negBook.length) w.push('<div class="msg warn"><b>' + negBook.length + ' SKU' + (negBook.length > 1 ? 's have' : ' has') + ' a negative book at this warehouse.</b> Stock left here that never arrived on the ledger, which is what a missing transfer in looks like. A recount would write that whole gap up as a variance gain. Post the transfer in first, or use Opening balance.</div>');
     if (S.mode === 'open' && S.lines.some(l => l.onSheet && l.book !== 0)) w.push('<div class="msg warn">Some of these SKUs already have stock on the book here. An opening balance adds to it.</div>');
     $('#warnings').innerHTML = w.join('');
 
