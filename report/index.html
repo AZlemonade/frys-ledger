@@ -1,0 +1,134 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Fry's Ledger inventory</title>
+<link rel="icon" href="../icon-192.png">
+<style>
+:root{--paper:#F7F6F2;--paper-2:#EFEDE6;--card:#fff;--ink:#1E1B1C;--ink-2:#4B4548;--ink-3:#7A7275;--line:#D8D3CC;--accent:#A8215E;--accent-soft:#F3DCE6;--good:#2E7D4F;--crit:#B3261E;--warn:#B7770F;--warn-soft:#FBEBCF}
+*{box-sizing:border-box}
+html,body{margin:0;background:var(--paper);color:var(--ink);font-family:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;font-size:15px;line-height:1.45}
+header.top{position:sticky;top:0;z-index:10;background:var(--paper);border-bottom:1px solid var(--line);padding:12px 20px;display:flex;flex-wrap:wrap;gap:12px;align-items:baseline;justify-content:space-between}
+header.top h1{font-size:19px;margin:0}
+header.top .meta{font-size:13px;color:var(--ink-3)}
+main{max-width:1100px;margin:0 auto;padding:18px 20px 60px}
+.login{max-width:380px;margin:80px auto;padding:0 20px}
+.login .brand{font-size:12px;letter-spacing:.08em;text-transform:uppercase;color:var(--accent)}
+.login h2{margin:4px 0 4px;font-size:24px}
+.sub{color:var(--ink-3);font-size:14px;margin-bottom:14px}
+input.text{width:100%;font:inherit;padding:10px 12px;border:1px solid var(--line);border-radius:10px;background:#fff;margin:6px 0}
+.btn{border:0;background:var(--accent);color:#fff;font:inherit;font-weight:600;border-radius:10px;padding:10px 16px;cursor:pointer}
+.btn.quiet{background:var(--paper-2);color:var(--ink)}
+.btn.small{padding:6px 12px;font-size:13px}
+.btn:disabled{opacity:.45}
+.tiles{display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:12px;margin:8px 0 26px}
+.tile{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:14px 16px}
+.tile .lab{font-size:11px;letter-spacing:.06em;text-transform:uppercase;color:var(--ink-3)}
+.tile .val{font-size:27px;font-weight:700;font-variant-numeric:tabular-nums;line-height:1.2;margin-top:2px}
+.tile .sub2{font-size:13px;color:var(--ink-3);font-variant-numeric:tabular-nums}
+section{margin-bottom:34px}
+h2.sec{font-size:17px;margin:0 0 2px}
+p.note{color:var(--ink-3);font-size:13px;margin:0 0 12px}
+.bar{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-bottom:10px}
+.bar input.search{flex:1;min-width:180px;font:inherit;padding:8px 11px;border:1px solid var(--line);border-radius:9px;background:#fff}
+.bar select{font:inherit;padding:8px 11px;border:1px solid var(--line);border-radius:9px;background:#fff}
+.wrap{overflow-x:auto;background:var(--card);border:1px solid var(--line);border-radius:12px}
+table{border-collapse:collapse;width:100%;font-size:14px}
+th,td{padding:9px 12px;text-align:left;border-bottom:1px solid var(--line);white-space:nowrap}
+th{font-size:11px;letter-spacing:.05em;text-transform:uppercase;color:var(--ink-3);font-weight:600;cursor:pointer;user-select:none;position:sticky;top:0;background:var(--card)}
+th.num,td.num{text-align:right;font-variant-numeric:tabular-nums}
+tbody tr:last-child td{border-bottom:0}
+tbody tr:hover{background:var(--paper-2)}
+tfoot td{font-weight:700;font-variant-numeric:tabular-nums;background:var(--paper-2)}
+.pill{display:inline-block;font-size:12px;padding:1px 8px;border-radius:999px;background:var(--paper-2);color:var(--ink-2)}
+.pill.stale{background:var(--warn-soft);color:var(--warn)}
+.neg{color:var(--crit)}
+.pos{color:var(--good)}
+.empty{padding:22px;color:var(--ink-3);font-size:14px}
+.chart{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:14px 16px;margin-bottom:12px}
+.chart .row{display:grid;grid-template-columns:110px 1fr 120px;align-items:center;gap:10px;padding:5px 0}
+.chart .name{font-size:13px;color:var(--ink-2);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.chart .track{background:var(--paper-2);border-radius:4px;height:14px;position:relative;overflow:hidden}
+.chart .fill{position:absolute;top:0;bottom:0;background:var(--crit);border-radius:4px}
+.chart .fill.up{background:var(--good)}
+.chart .amt{font-size:13px;text-align:right;font-variant-numeric:tabular-nums;color:var(--ink-2)}
+.msg{margin:10px 0;padding:10px 12px;border-radius:10px;font-size:14px}
+.msg.err{background:#F8DAD7;color:var(--crit)}
+footer{color:var(--ink-3);font-size:12px;padding:10px 20px 30px;max-width:1100px;margin:0 auto}
+@media (max-width:640px){ .chart .row{grid-template-columns:90px 1fr 92px} main{padding:14px} }
+</style>
+</head>
+<body>
+
+<div id="login" class="login">
+  <div class="brand">AZ Lemonade Stand</div>
+  <h2>Fry's Ledger inventory</h2>
+  <p class="sub">Same email and password as the merchandiser app.</p>
+  <input class="text" id="login-email" type="email" autocomplete="username" placeholder="you@example.com">
+  <input class="text" id="login-password" type="password" autocomplete="current-password" placeholder="Password">
+  <button class="btn" id="login-signin" style="width:100%">Sign in</button>
+  <div id="login-msg"></div>
+</div>
+
+<div id="app" style="display:none">
+<header class="top">
+  <div>
+    <h1>Fry's Ledger inventory</h1>
+    <div class="meta" id="asof">loading…</div>
+  </div>
+  <div>
+    <button class="btn quiet small" id="refresh">Refresh</button>
+    <button class="btn quiet small" id="signout">Sign out</button>
+  </div>
+</header>
+<main>
+
+<div class="tiles" id="tiles"></div>
+
+<section>
+  <h2 class="sec">Month-end value</h2>
+  <p class="note">Value at cost, worked out from the ledger. Stores is the consignment number.</p>
+  <div class="wrap"><table id="t-value"><thead><tr>
+    <th>Where</th><th class="num">Locations</th><th class="num">Units</th><th class="num">Cases</th><th class="num">Value at cost</th>
+  </tr></thead><tbody></tbody><tfoot></tfoot></table></div>
+  <div class="bar" style="margin-top:8px"><button class="btn quiet small" data-csv="value">Download CSV</button></div>
+</section>
+
+<section>
+  <h2 class="sec">Store balances</h2>
+  <p class="note">Every location holding stock. Click a column to sort.</p>
+  <div class="bar">
+    <input class="search" id="q-stores" placeholder="Search store number, name, city or merchandiser">
+    <select id="f-route"><option value="">All routes</option></select>
+    <select id="f-type"><option value="STORE">Stores</option><option value="">Everything</option><option value="VAN">Vans</option><option value="WAREHOUSE">Warehouses</option></select>
+    <button class="btn quiet small" data-csv="stores">Download CSV</button>
+  </div>
+  <div class="wrap"><table id="t-stores"><thead><tr>
+    <th data-k="store">Store</th><th data-k="name">Name</th><th data-k="route">Route</th><th data-k="merch">Merchandiser</th>
+    <th class="num" data-k="units">Units</th><th class="num" data-k="cases">Cases</th><th class="num" data-k="value">Value</th>
+    <th data-k="last_drop">Last drop</th><th data-k="last_count">Last count</th>
+  </tr></thead><tbody></tbody><tfoot></tfoot></table></div>
+</section>
+
+<section>
+  <h2 class="sec">Shrink and variance</h2>
+  <p class="note">What counts have adjusted away since the ledger opened. Negative means the count came up short of the book.</p>
+  <div id="shrink-chart" class="chart"></div>
+  <div class="bar">
+    <select id="f-shrink"><option value="store">By store</option><option value="route">By route</option><option value="sku">By SKU</option></select>
+    <button class="btn quiet small" data-csv="shrink">Download CSV</button>
+  </div>
+  <div class="wrap"><table id="t-shrink"><thead><tr>
+    <th data-k="name">Name</th><th class="num" data-k="units">Units</th><th class="num" data-k="cases">Cases</th><th class="num" data-k="value">Value at cost</th><th class="num" data-k="events">Adjustments</th>
+  </tr></thead><tbody></tbody><tfoot></tfoot></table></div>
+</section>
+
+</main>
+<footer>Reads the azls-frys-ledger database directly. Balances are never stored, they are worked out from the movement rows each time this page loads.</footer>
+</div>
+
+<script src="../config.js"></script>
+<script src="report.js"></script>
+</body>
+</html>
