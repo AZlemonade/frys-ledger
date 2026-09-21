@@ -1,4 +1,4 @@
-/* Fry's Ledger v0.2 — AZ Lemonade Stand consignment app.
+/* Fry's Ledger v0.3 — AZ Lemonade Stand consignment app.
    Plain JS, no framework. Talks to Supabase over REST. Works offline with an outbox. */
 (function () {
   'use strict';
@@ -139,22 +139,40 @@
     kind: (('BarcodeDetector' in window) ? 'native' : (window.Html5Qrcode ? 'lib' : 'none')),
     active: null,
     async start(container, onCode) {
+      try { await this.open(container, onCode); }
+      catch (e) {
+        this.stop();
+        container.style.display = 'block';
+        container.innerHTML = '<div style="padding:12px;text-align:center;font-size:14px;color:var(--crit)">Camera did not start.<br>' +
+          String((e && e.message) || e || '').slice(0, 160) +
+          '<br><br><span style="color:var(--ink-3)">Tap the SKU row below and pick it from the list instead.</span></div>';
+      }
+    },
+    async open(container, onCode) {
       this.stop();
+      container.style.display = 'block';
       container.innerHTML = '';
       if (this.kind === 'native') {
-        const video = document.createElement('video'); video.setAttribute('playsinline', ''); video.muted = true; container.appendChild(video);
+        const video = document.createElement('video'); video.setAttribute('playsinline', ''); video.setAttribute('autoplay', ''); video.muted = true; video.style.width = '100%';
+        container.appendChild(video);
         const hint = document.createElement('div'); hint.className = 'hint'; hint.textContent = 'Point at the case or bottle barcode'; container.appendChild(hint);
-        const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } });
+        const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: { ideal: 'environment' } } });
         video.srcObject = stream; await video.play();
         const det = new window.BarcodeDetector({ formats: ['upc_a', 'upc_e', 'ean_13', 'ean_8', 'itf', 'code_128'] });
         let stop = false; this.active = { stop: () => { stop = true; stream.getTracks().forEach(t => t.stop()); } };
         const tick = async () => { if (stop) return; try { const codes = await det.detect(video); if (codes.length) { this.stop(); onCode(codes[0].rawValue); return; } } catch (e) {} setTimeout(tick, 150); };
         tick();
       } else if (this.kind === 'lib') {
-        const id = 'qr-' + uuid(); const div = document.createElement('div'); div.id = id; container.appendChild(div);
+        if (!window.Html5Qrcode) throw new Error('Scanner library did not load. Close the app and open it again with signal.');
+        const id = 'qr-' + uuid();
+        const div = document.createElement('div');
+        div.id = id; div.style.width = '100%'; div.style.minHeight = '240px';
+        container.appendChild(div);
+        await new Promise(r => setTimeout(r, 60));   // let the box get a real width before the library measures it
         const h = new window.Html5Qrcode(id, { formatsToSupport: [window.Html5QrcodeSupportedFormats.UPC_A, window.Html5QrcodeSupportedFormats.UPC_E, window.Html5QrcodeSupportedFormats.EAN_13, window.Html5QrcodeSupportedFormats.EAN_8, window.Html5QrcodeSupportedFormats.ITF, window.Html5QrcodeSupportedFormats.CODE_128] });
         this.active = { stop: () => h.stop().catch(() => {}) };
-        await h.start({ facingMode: 'environment' }, { fps: 10, qrbox: { width: 260, height: 140 } }, txt => { this.stop(); onCode(txt); }, () => {});
+        const box = Math.max(160, Math.min(280, Math.floor(div.clientWidth * 0.8)));
+        await h.start({ facingMode: 'environment' }, { fps: 10, qrbox: { width: box, height: Math.round(box * 0.55) } }, txt => { this.stop(); onCode(txt); }, () => {});
       } else {
         container.innerHTML = '<div style="padding:12px;text-align:center;color:var(--ink-3)">No camera scanner on this phone. Tap the SKU instead.</div>';
       }
@@ -375,7 +393,7 @@
   function renderMore() {
     $('#more-email').textContent = email() || '';
     $('#more-master').textContent = S.masterAt ? new Date(S.masterAt).toLocaleDateString() + ' · ' + S.skus.length + ' SKUs · ' + S.locations.filter(l => l.type === 'STORE').length + ' stores' : 'not loaded';
-    $('#more-scanner').textContent = { native: 'camera (built in)', lib: 'camera (library)', none: 'not available' }[scanner.kind];
+    $('#more-scanner').textContent = ({ native: 'camera (built in)', lib: 'camera (library)', none: 'not available' })[scanner.kind] + (window.Html5Qrcode ? '' : ' · library missing');
     updateSync();
     $('#more-refresh').onclick = async () => { try { await loadMaster(); await loadBalances([myVan()]); msg($('#s-more'), 'ok', 'Refreshed.'); renderMore(); } catch (e) { msg($('#s-more'), 'err', e.message); } };
     $('#more-retry').onclick = () => { S.outbox.forEach(i => { delete i.parked; i.tries = 0; }); LS.set('outbox', S.outbox); flush(); };
