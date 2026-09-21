@@ -77,15 +77,12 @@ textarea,input.text{width:100%;font:inherit;padding:10px 12px;border:1px solid v
 <div id="login" class="login">
   <div class="brand">AZ Lemonade Stand</div>
   <h1>Fry's Ledger</h1>
-  <p class="sub">Sign in with your email. A 6-digit code will be sent to it.</p>
+  <p class="sub">Sign in with your work email and the password Austin gave you. The app stays signed in after this.</p>
   <div id="login-step1">
-    <input class="text" id="login-email" type="email" inputmode="email" autocomplete="email" placeholder="you@example.com">
-    <button class="btn" id="login-send">Send code</button>
-  </div>
-  <div id="login-step2" style="display:none">
-    <input class="text" id="login-code" type="text" inputmode="numeric" autocomplete="one-time-code" placeholder="6-digit code" maxlength="8">
-    <button class="btn" id="login-verify">Sign in</button>
-    <button class="btn ghost" id="login-back">Use a different email</button>
+    <input class="text" id="login-email" type="email" inputmode="email" autocomplete="username" placeholder="you@example.com">
+    <input class="text" id="login-password" type="password" autocomplete="current-password" placeholder="Password">
+    <button class="btn" id="login-signin">Sign in</button>
+    <div class="hint">Forgot it? Text Austin and he will set a new one.</div>
   </div>
   <div id="login-msg"></div>
 </div>
@@ -152,7 +149,7 @@ textarea,input.text{width:100%;font:inherit;padding:10px 12px;border:1px solid v
   <button class="btn quiet" id="more-refresh">Refresh master data and balances</button>
   <button class="btn quiet" id="more-retry">Retry pending uploads</button>
   <button class="btn ghost" id="more-signout">Sign out</button>
-  <div class="hint">Fry's Ledger v0.1 · AZ Lemonade Stand</div>
+  <div class="hint">Fry's Ledger v0.2 · AZ Lemonade Stand</div>
 </section>
 
 </main>

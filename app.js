@@ -1,4 +1,4 @@
-/* Fry's Ledger v0.1 — AZ Lemonade Stand consignment app.
+/* Fry's Ledger v0.2 — AZ Lemonade Stand consignment app.
    Plain JS, no framework. Talks to Supabase over REST. Works offline with an outbox. */
 (function () {
   'use strict';
@@ -383,20 +383,26 @@
   }
 
   // ---------------- auth ----------------
-  async function sendCode() {
-    const em = ($('#login-email').value || '').trim().toLowerCase(); if (!em.includes('@')) return;
-    $('#login-send').disabled = true;
-    const r = await fetch(URL0 + '/auth/v1/otp', { method: 'POST', headers: { apikey: KEY, 'Content-Type': 'application/json' }, body: JSON.stringify({ email: em, create_user: true }) });
-    $('#login-send').disabled = false;
-    if (!r.ok) { $('#login-msg').innerHTML = '<div class="msg err">Could not send a code: ' + (await r.text()).slice(0, 120) + '</div>'; return; }
-    LS.set('login_email', em); $('#login-step1').style.display = 'none'; $('#login-step2').style.display = ''; $('#login-code').focus();
-    $('#login-msg').innerHTML = '<div class="msg ok">Code sent to ' + em + '. Check spam if it is not there in a minute.</div>';
-  }
-  async function verifyCode() {
-    const em = LS.get('login_email'); const code = digits($('#login-code').value);
-    const r = await fetch(URL0 + '/auth/v1/verify', { method: 'POST', headers: { apikey: KEY, 'Content-Type': 'application/json' }, body: JSON.stringify({ type: 'email', email: em, token: code }) });
-    if (!r.ok) { $('#login-msg').innerHTML = '<div class="msg err">That code did not work. Codes expire after a few minutes; send a new one.</div>'; return; }
-    setSession(await r.json()); await boot();
+  async function signIn() {
+    const em = ($('#login-email').value || '').trim().toLowerCase();
+    const pw = $('#login-password').value || '';
+    if (!em.includes('@') || !pw) { $('#login-msg').innerHTML = '<div class="msg err">Enter your email and password.</div>'; return; }
+    $('#login-signin').disabled = true;
+    let r;
+    try { r = await fetch(URL0 + '/auth/v1/token?grant_type=password', { method: 'POST', headers: { apikey: KEY, 'Content-Type': 'application/json' }, body: JSON.stringify({ email: em, password: pw }) }); }
+    catch (e) { $('#login-signin').disabled = false; $('#login-msg').innerHTML = '<div class="msg err">No signal. Try again where you have service.</div>'; return; }
+    $('#login-signin').disabled = false;
+    if (!r.ok) {
+      const t = await r.text();
+      $('#login-msg').innerHTML = /invalid/i.test(t)
+        ? '<div class="msg err">That email and password did not match. Check for a typo, or ask Austin to set a new password.</div>'
+        : '<div class="msg err">Could not sign in: ' + t.slice(0, 120) + '</div>';
+      return;
+    }
+    LS.set('login_email', em);
+    $('#login-password').value = '';
+    setSession(await r.json());
+    await boot();
   }
 
   // ---------------- boot ----------------
@@ -410,10 +416,9 @@
     updateSync(); flush(); go('van');
   }
   $$('[data-go]').forEach(b => { b.onclick = () => go(b.dataset.go); });
-  $('#login-send').onclick = sendCode; $('#login-verify').onclick = verifyCode;
-  $('#login-back').onclick = () => { $('#login-step1').style.display = ''; $('#login-step2').style.display = 'none'; };
+  $('#login-signin').onclick = signIn;
   $('#login-email').value = LS.get('login_email', '');
-  $('#login-code').onkeydown = e => { if (e.key === 'Enter') verifyCode(); };
+  $('#login-password').onkeydown = e => { if (e.key === 'Enter') signIn(); };
   if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(() => {});
   boot();
 })();
