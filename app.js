@@ -5,7 +5,7 @@
   const CFG = window.LEDGER_CONFIG || {};
   const URL0 = (CFG.url || '').replace(/\/+$/, '');
   const KEY = CFG.key || '';
-  const APP_VERSION = '0.5';   // the only place the version lives; the More screen reads it
+  const APP_VERSION = '0.5.1';   // the only place the version lives; the More screen reads it
   const $ = (s, el) => (el || document).querySelector(s);
   const $$ = (s, el) => Array.from((el || document).querySelectorAll(s));
   const LS = {
@@ -230,7 +230,16 @@
         const box = Math.max(160, Math.min(280, Math.floor(div.clientWidth * 0.8)));
         const camId = await this.pickBackCamera();
         const source = camId ? { deviceId: { exact: camId } } : { facingMode: 'environment' };
-        await h.start(Object.assign(source, SHARP), { fps: 10, qrbox: { width: box, height: Math.round(box * 0.55) } }, txt => { this.stop(); onCode(txt); }, () => {});
+        const cfg = { fps: 10, qrbox: { width: box, height: Math.round(box * 0.55) } };
+        const hit = txt => { this.stop(); onCode(txt); };
+        // The library only accepts ONE key in the first argument. Everything else has to ride
+        // in videoConstraints. If it still refuses, a plain camera beats no camera.
+        try {
+          await h.start(source, Object.assign({ videoConstraints: Object.assign({}, source, SHARP) }, cfg), hit, () => {});
+        } catch (e) {
+          try { await h.stop(); } catch (e2) {}
+          await h.start({ facingMode: 'environment' }, cfg, hit, () => {});
+        }
         const vid = $('video', div);
         this.controls(container, vid && vid.srcObject && vid.srcObject.getVideoTracks ? vid.srcObject.getVideoTracks()[0] : null);
         const tip = document.createElement('div'); tip.className = 'hint'; tip.textContent = 'Tap the picture to refocus';
