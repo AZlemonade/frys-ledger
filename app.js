@@ -5,6 +5,7 @@
   const CFG = window.LEDGER_CONFIG || {};
   const URL0 = (CFG.url || '').replace(/\/+$/, '');
   const KEY = CFG.key || '';
+  const APP_VERSION = '0.5';   // the only place the version lives; the More screen reads it
   const $ = (s, el) => (el || document).querySelector(s);
   const $$ = (s, el) => Array.from((el || document).querySelectorAll(s));
   const LS = {
@@ -505,6 +506,7 @@
   function renderMore() {
     $('#more-email').textContent = email() || '';
     $('#more-master').textContent = S.masterAt ? new Date(S.masterAt).toLocaleDateString() + ' · ' + S.skus.length + ' SKUs · ' + S.locations.filter(l => l.type === 'STORE').length + ' stores · ' + S.barcodes.length + ' barcodes' : 'not loaded';
+    const ver = $('#app-ver'); if (ver) ver.textContent = "Fry's Ledger v" + APP_VERSION + ' · AZ Lemonade Stand';
     $('#more-scanner').textContent = ({ native: 'camera (built in)', lib: 'camera (library)', none: 'not available' })[scanner.kind] + (window.Html5Qrcode ? '' : ' · library missing');
     updateSync();
     $('#more-refresh').onclick = async () => { try { await loadMaster(); await loadBalances([myVan()]); msg($('#s-more'), 'ok', 'Refreshed.'); renderMore(); } catch (e) { msg($('#s-more'), 'err', e.message); } };
