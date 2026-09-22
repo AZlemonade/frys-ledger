@@ -1,4 +1,4 @@
-/* Fry's Ledger v0.4 — AZ Lemonade Stand consignment app.
+/* Fry's Ledger v0.5 — AZ Lemonade Stand consignment app.
    Plain JS, no framework. Talks to Supabase over REST. Works offline with an outbox. */
 (function () {
   'use strict';
@@ -159,16 +159,60 @@
           '<br><br><span style="color:var(--ink-3)">Tap the SKU row below and pick it from the list instead.</span></div>';
       }
     },
+    // iPhones expose several rear lenses. The ultra wide cannot focus at arm's length and is
+    // often what facingMode hands back, which reads as "the camera will not focus".
+    async pickBackCamera() {
+      try {
+        if (!window.Html5Qrcode || !window.Html5Qrcode.getCameras) return null;
+        const cams = await window.Html5Qrcode.getCameras();
+        if (!cams || !cams.length) return null;
+        const back = cams.filter(c => /back|rear|environment/i.test(c.label || ''));
+        const pool = back.length ? back : cams;
+        const plain = pool.find(c => /^(back|rear) camera$/i.test((c.label || '').trim()));
+        const notWide = pool.find(c => !/ultra|wide|tele|depth|truedepth/i.test(c.label || ''));
+        return (plain || notWide || pool[pool.length - 1]).id;
+      } catch (e) { return null; }
+    },
+    controls(container, track) {
+      if (!track || !track.getCapabilities || !track.applyConstraints) return;
+      let caps = {};
+      try { caps = track.getCapabilities() || {}; } catch (e) { return; }
+      const apply = adv => { try { track.applyConstraints({ advanced: [adv] }); } catch (e) {} };
+      const bar = document.createElement('div'); bar.className = 'scanbar';
+      if (caps.zoom && caps.zoom.max > caps.zoom.min) {
+        const start = Math.min(caps.zoom.max, Math.max(caps.zoom.min, 2));
+        const lab = document.createElement('span'); lab.textContent = 'zoom';
+        const r = document.createElement('input');
+        r.type = 'range'; r.min = caps.zoom.min; r.max = caps.zoom.max; r.step = caps.zoom.step || 0.1; r.value = start;
+        r.oninput = () => apply({ zoom: +r.value });
+        apply({ zoom: start });
+        bar.appendChild(lab); bar.appendChild(r);
+      }
+      if (caps.torch) {
+        let on = false;
+        const b = document.createElement('button'); b.type = 'button'; b.textContent = 'Light';
+        b.onclick = e => { e.stopPropagation(); on = !on; b.classList.toggle('on', on); apply({ torch: on }); };
+        bar.appendChild(b);
+      }
+      if (bar.childNodes.length) container.appendChild(bar);
+      const v = $('video', container);
+      if (v && caps.focusMode) v.onclick = () => {
+        if (caps.focusMode.indexOf('single-shot') > -1) apply({ focusMode: 'single-shot' });
+        else apply({ focusMode: 'continuous' });
+      };
+    },
     async open(container, onCode) {
       this.stop();
       container.style.display = 'block';
       container.innerHTML = '';
+      const SHARP = { width: { ideal: 1920 }, height: { ideal: 1080 }, advanced: [{ focusMode: 'continuous' }] };
       if (this.kind === 'native') {
         const video = document.createElement('video'); video.setAttribute('playsinline', ''); video.setAttribute('autoplay', ''); video.muted = true; video.style.width = '100%';
         container.appendChild(video);
         const hint = document.createElement('div'); hint.className = 'hint'; hint.textContent = 'Point at the case or bottle barcode'; container.appendChild(hint);
-        const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: { ideal: 'environment' } } });
+        const stream = await navigator.mediaDevices.getUserMedia({ video: Object.assign({ facingMode: { ideal: 'environment' } }, SHARP) });
         video.srcObject = stream; await video.play();
+        this.controls(container, stream.getVideoTracks()[0]);
         const det = new window.BarcodeDetector({ formats: ['upc_a', 'upc_e', 'ean_13', 'ean_8', 'itf', 'code_128'] });
         let stop = false; this.active = { stop: () => { stop = true; stream.getTracks().forEach(t => t.stop()); } };
         const tick = async () => { if (stop) return; try { const codes = await det.detect(video); if (codes.length) { this.stop(); onCode(codes[0].rawValue); return; } } catch (e) {} setTimeout(tick, 150); };
@@ -183,7 +227,13 @@
         const h = new window.Html5Qrcode(id, { formatsToSupport: [window.Html5QrcodeSupportedFormats.UPC_A, window.Html5QrcodeSupportedFormats.UPC_E, window.Html5QrcodeSupportedFormats.EAN_13, window.Html5QrcodeSupportedFormats.EAN_8, window.Html5QrcodeSupportedFormats.ITF, window.Html5QrcodeSupportedFormats.CODE_128] });
         this.active = { stop: () => h.stop().catch(() => {}) };
         const box = Math.max(160, Math.min(280, Math.floor(div.clientWidth * 0.8)));
-        await h.start({ facingMode: 'environment' }, { fps: 10, qrbox: { width: box, height: Math.round(box * 0.55) } }, txt => { this.stop(); onCode(txt); }, () => {});
+        const camId = await this.pickBackCamera();
+        const source = camId ? { deviceId: { exact: camId } } : { facingMode: 'environment' };
+        await h.start(Object.assign(source, SHARP), { fps: 10, qrbox: { width: box, height: Math.round(box * 0.55) } }, txt => { this.stop(); onCode(txt); }, () => {});
+        const vid = $('video', div);
+        this.controls(container, vid && vid.srcObject && vid.srcObject.getVideoTracks ? vid.srcObject.getVideoTracks()[0] : null);
+        const tip = document.createElement('div'); tip.className = 'hint'; tip.textContent = 'Tap the picture to refocus';
+        container.appendChild(tip);
       } else {
         container.innerHTML = '<div style="padding:12px;text-align:center;color:var(--ink-3)">No camera scanner on this phone. Tap the SKU instead.</div>';
       }
@@ -192,10 +242,21 @@
   };
 
   // ---------------- GPS ----------------
-  function getPos() {
+  // Never block on this. On iOS getCurrentPosition hangs while the permission prompt is
+  // unanswered, and its own timeout does not run during that wait, so anything that awaited
+  // it sat there forever with no error. Everything here resolves, always.
+  function getPos(maxWait) {
     return new Promise(res => {
-      if (!navigator.geolocation) return res(null);
-      navigator.geolocation.getCurrentPosition(p => { S.lastPos = { lat: p.coords.latitude, lng: p.coords.longitude, at: Date.now() }; res(S.lastPos); }, () => res(S.lastPos), { enableHighAccuracy: true, timeout: 6000, maximumAge: 120000 });
+      let done = false;
+      const finish = v => { if (!done) { done = true; res(v); } };
+      setTimeout(() => finish(S.lastPos || null), maxWait || 4000);
+      if (!navigator.geolocation) return finish(null);
+      try {
+        navigator.geolocation.getCurrentPosition(
+          p => { S.lastPos = { lat: p.coords.latitude, lng: p.coords.longitude, at: Date.now() }; finish(S.lastPos); },
+          () => finish(S.lastPos || null),
+          { enableHighAccuracy: true, timeout: 6000, maximumAge: 120000 });
+      } catch (e) { finish(S.lastPos || null); }
     });
   }
   function distKm(a, b) { const R = 6371, dLat = (b.lat - a.lat) * Math.PI / 180, dLng = (b.lng - a.lng) * Math.PI / 180; const x = Math.sin(dLat / 2) ** 2 + Math.cos(a.lat * Math.PI / 180) * Math.cos(b.lat * Math.PI / 180) * Math.sin(dLng / 2) ** 2; return 2 * R * Math.asin(Math.sqrt(x)); }
@@ -226,6 +287,7 @@
     if (withSearch) $('.search', p).oninput = e => render(e.target.value);
     $('#sheet-close').onclick = () => $('#sheet').classList.remove('on');
     $('#sheet').classList.add('on');
+    p.__setOpts = next => { opts = next; render(withSearch && $('.search', p) ? $('.search', p).value : ''); };
   }
   function storeOptions(all) {
     const routes = myRoutes();
@@ -239,9 +301,12 @@
     return opts;
   }
   function pickStore(onPick) {
-    getPos().then(() => {
-      const open = all => sheet('Store', storeOptions(all), o => { if (o.id === '__all') return open(true); onPick(loc(o.id)); }, true);
-      open(false);
+    let showAll = false;
+    const open = all => { showAll = all; sheet('Store', storeOptions(all), o => { if (o.id === '__all') return open(true); onPick(loc(o.id)); }, true); };
+    open(false);                         // open now, never wait on location
+    getPos(4000).then(p => {             // nearest-first arrives late, if it arrives at all
+      const panel = $('#sheet-panel');
+      if (p && panel && panel.__setOpts && $('#sheet').classList.contains('on')) panel.__setOpts(storeOptions(showAll));
     });
   }
   function pickWarehouse(onPick) {
@@ -305,7 +370,7 @@
     lines.forEach((l, i) => { const s = sku(l.sku_id); const d = document.createElement('div'); d.className = 'row'; d.innerHTML = '<span class="k">' + s.name + '</span><span class="v">' + l.cases_in + ' cs ' + l.eaches_in + ' = ' + l.units + '<span class="del">remove</span></span>'; $('.del', d).onclick = () => onDel(i); container.appendChild(d); });
   }
   async function postBatch(type, from, to, lines, extra) {
-    const pos = await getPos();
+    const pos = await getPos(3000);
     const batch = uuid();
     const rows = lines.map(l => Object.assign({ type, from_loc: from, to_loc: to, sku_id: l.sku_id, units: l.units, cases_in: l.cases_in, eaches_in: l.eaches_in, user_email: email(), device_id: deviceId(), device_ts: nowIso(), lat: pos && pos.lat, lng: pos && pos.lng, gps_ok: gpsOk(pos, to, from), source: 'app', batch_id: batch }, extra || {}));
     enqueue({ path: '/rest/v1/movements', method: 'POST', body: rows, headers: { Prefer: 'return=minimal' } });
@@ -400,21 +465,39 @@
     const g = $('#count-grid'); g.innerHTML = '';
     if (!c.loc) { $('#count-actions').innerHTML = ''; return; }
     const isStore = loc(c.loc).type === 'STORE';
+    const cell = id => c.cells[id] || (c.cells[id] = { bc: '', bl: '', d: '' });
+    const unitsOf = s => { const k = cell(s.sku_id); return (+k.bc || 0) * (s.units_per_case || 1) + (+k.bl || 0) + (isStore ? (+k.d || 0) : 0); };
+    const label = s => (s.units_per_case || 1) + '/cs' + (unitsOf(s) ? ' \u00b7 ' + unitsOf(s).toLocaleString() + ' units' : '');
     S.skus.forEach(s => {
-      const cell = c.cells[s.sku_id] || (c.cells[s.sku_id] = { b: '', d: '' });
+      const k = cell(s.sku_id);
+      const f = (lab, key) => '<label><small>' + lab + '</small><input type="number" inputmode="numeric" min="0" data-s="' + s.sku_id + '" data-f="' + key + '" value="' + k[key] + '"></label>';
       const d = document.createElement('div'); d.className = 'row';
-      d.innerHTML = '<span class="k">' + s.name + '<br><small style="color:var(--ink-3)">' + s.units_per_case + '/cs</small></span><span class="cells">' + (isStore ? '<label><small>backstock</small><input type="number" inputmode="numeric" min="0" data-s="' + s.sku_id + '" data-f="b" value="' + cell.b + '"></label><label><small>display</small><input type="number" inputmode="numeric" min="0" data-s="' + s.sku_id + '" data-f="d" value="' + cell.d + '"></label>' : '<label><small>units</small><input type="number" inputmode="numeric" min="0" data-s="' + s.sku_id + '" data-f="b" value="' + cell.b + '"></label>') + '</span>';
+      d.innerHTML = '<span class="k">' + s.name + '<br><small class="tot">' + label(s) + '</small></span>' +
+        '<span class="cells">' + f(isStore ? 'back cs' : 'cases', 'bc') + f(isStore ? 'back ea' : 'loose', 'bl') + (isStore ? f('display', 'd') : '') + '</span>';
       g.appendChild(d);
     });
-    $$('input', g).forEach(i => { i.oninput = () => { c.cells[i.dataset.s][i.dataset.f] = i.value; }; });
-    $('#count-actions').innerHTML = '<div class="hint">Blank counts as zero. Every SKU is compared to the book when you post.</div><button class="btn" id="count-post">Post count</button><button class="btn quiet" id="count-clear">Clear</button>';
+    const foot = () => { const el = $('#count-total'); if (el) el.textContent = S.skus.reduce((a, s) => a + unitsOf(s), 0).toLocaleString() + ' units'; };
+    $$('input', g).forEach(i => {
+      i.oninput = () => {
+        cell(i.dataset.s)[i.dataset.f] = i.value;
+        const s = sku(i.dataset.s);
+        const t = $('.tot', i.parentNode.parentNode.parentNode);
+        if (t && s) t.textContent = label(s);
+        foot();
+      };
+    });
+    $('#count-actions').innerHTML = '<div class="hint">' + (isStore ? 'Back room in cases plus loose bottles, display in bottles.' : 'Cases plus any loose bottles.') + ' Blank counts as zero, and every SKU is compared to the book when you post.</div>' +
+      '<div class="row"><span class="k">Counted</span><span class="v" id="count-total">0 units</span></div>' +
+      '<button class="btn" id="count-post">Post count</button><button class="btn quiet" id="count-clear">Clear</button>';
+    foot();
     $('#count-clear').onclick = () => { c.cells = {}; renderCount(); };
     $('#count-post').onclick = async () => {
-      const total = S.skus.reduce((a, s) => a + (+c.cells[s.sku_id].b || 0) + (+c.cells[s.sku_id].d || 0), 0);
-      if (!confirm('Post this count for ' + loc(c.loc).name + '? ' + total + ' units total. This resets the book to what you counted.')) return;
       const count_id = uuid();
+      const lines = S.skus.map(s => { const k = cell(s.sku_id); return { count_id, sku_id: s.sku_id, backstock_units: (+k.bc || 0) * (s.units_per_case || 1) + (+k.bl || 0), display_units: isStore ? (+k.d || 0) : 0 }; });
+      const total = lines.reduce((a, l) => a + l.backstock_units + l.display_units, 0);
+      if (!confirm('Post this count for ' + loc(c.loc).name + '? ' + total.toLocaleString() + ' units total. This resets the book to what you counted.')) return;
       enqueue({ path: '/rest/v1/counts', method: 'POST', body: { count_id, location_id: c.loc, user_email: email() }, headers: { Prefer: 'return=minimal' } });
-      enqueue({ path: '/rest/v1/count_lines', method: 'POST', body: S.skus.map(s => ({ count_id, sku_id: s.sku_id, backstock_units: +c.cells[s.sku_id].b || 0, display_units: +c.cells[s.sku_id].d || 0 })), headers: { Prefer: 'return=minimal' } });
+      enqueue({ path: '/rest/v1/count_lines', method: 'POST', body: lines, headers: { Prefer: 'return=minimal' } });
       enqueue({ path: '/rest/v1/rpc/post_count', method: 'POST', body: { p_count_id: count_id } });
       msg($('#s-van'), 'ok', 'Count posted for ' + loc(c.loc).name + '.'); S.count = { loc: null, cells: {} }; go('van');
     };

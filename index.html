@@ -65,8 +65,15 @@ textarea,input.text{width:100%;font:inherit;padding:10px 12px;border:1px solid v
 .login{max-width:420px;margin:60px auto;padding:0 16px}
 .login .brand{font-size:13px;letter-spacing:.08em;text-transform:uppercase;color:var(--accent)}
 .count-grid .row{align-items:stretch}
-.count-grid input{width:64px;font:inherit;font-size:20px;font-weight:600;text-align:center;border:1px solid var(--line);border-radius:8px;padding:6px 4px;background:#fff}
-.count-grid .cells{display:flex;gap:6px}
+.count-grid input{width:56px;font:inherit;font-size:20px;font-weight:600;text-align:center;border:1px solid var(--line);border-radius:8px;padding:6px 4px;background:#fff}
+.count-grid .cells{display:flex;gap:5px}
+.count-grid .k{flex:1;min-width:0}
+.count-grid .tot{display:block;font-size:11px;color:var(--ink-3)}
+.scan .scanbar{position:absolute;top:6px;left:6px;right:6px;display:flex;gap:8px;align-items:center;background:rgba(0,0,0,.45);border-radius:999px;padding:4px 10px;z-index:2}
+.scan .scanbar span{font-size:11px;color:#fff;text-transform:uppercase;letter-spacing:.05em}
+.scan .scanbar input[type=range]{flex:1;min-width:60px;accent-color:#fff;background:transparent}
+.scan .scanbar button{border:0;background:rgba(255,255,255,.25);color:#fff;font:inherit;font-size:12px;font-weight:600;border-radius:999px;padding:3px 10px}
+.scan .scanbar button.on{background:#F4C430;color:#1E1B1C}
 .count-grid .cells small{display:block;font-size:10px;color:var(--ink-3);text-align:center;text-transform:uppercase;letter-spacing:.05em}
 .pill{display:inline-block;font-size:12px;padding:2px 8px;border-radius:999px;background:var(--paper-2);color:var(--ink-2)}
 .neg{color:var(--crit);font-weight:700}
