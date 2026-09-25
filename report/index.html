@@ -56,6 +56,28 @@ tfoot td{font-weight:700;font-variant-numeric:tabular-nums;background:var(--pape
 .msg{margin:10px 0;padding:10px 12px;border-radius:10px;font-size:14px}
 .msg.err{background:#F8DAD7;color:var(--crit)}
 footer{color:var(--ink-3);font-size:12px;padding:10px 20px 30px;max-width:1100px;margin:0 auto}
+tr.loc,tr.stop{cursor:pointer}
+tr.loc.open td,tr.stop.open td{background:var(--paper-2);border-bottom-color:transparent}
+.chev{display:inline-block;width:14px;color:var(--ink-3);font-size:11px}
+tr.detail>td{background:var(--paper-2);padding:0 12px 12px 38px;white-space:normal}
+tr.detail:hover{background:transparent}
+table.sub{width:auto;min-width:420px;background:var(--card);border:1px solid var(--line);border-radius:8px;font-size:13px}
+table.sub th{position:static;cursor:default;background:var(--card);font-size:10px}
+table.sub td,table.sub th{padding:6px 10px}
+table.sub tbody tr:hover{background:transparent}
+.dim{color:var(--ink-3);font-size:13px}
+.daybar{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-bottom:10px}
+.daybar input[type=date]{font:inherit;padding:7px 10px;border:1px solid var(--line);border-radius:9px;background:#fff;color:var(--ink)}
+.daybar h3{font-size:15px;margin:0 8px 0 4px;font-weight:600}
+.dayblock{margin-bottom:16px}
+.who{display:flex;flex-wrap:wrap;gap:4px 12px;align-items:baseline;margin:0 0 6px}
+.who b{font-size:15px}.who span{font-size:13px;color:var(--ink-3)}
+.kind{display:inline-block;font-size:12px;padding:1px 8px;border-radius:999px;background:var(--paper-2);color:var(--ink-2)}
+.kind.k-DROP{background:var(--accent-soft);color:var(--accent)}
+.kind.k-LOAD{background:#DDEBF6;color:#1F5A8A}
+.kind.k-COUNT_ADJ{background:var(--warn-soft);color:var(--warn)}
+#shrink-opening:empty{display:none}
+#shrink-opening{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:10px 12px;font-size:13px;color:var(--ink-2);margin:0 0 12px}
 @media (max-width:640px){ .chart .row{grid-template-columns:90px 1fr 92px} main{padding:14px} }
 </style>
 </head>
@@ -97,13 +119,15 @@ footer{color:var(--ink-3);font-size:12px;padding:10px 20px 30px;max-width:1100px
 
 <section>
   <h2 class="sec">Store balances</h2>
-  <p class="note">Every location holding stock. Click a column to sort.</p>
+  <p class="note">Every location holding stock. Click a row to see it by SKU, or a column heading to sort.</p>
   <div class="bar">
     <input class="search" id="q-stores" placeholder="Search store number, name, city or merchandiser">
     <select id="f-route"><option value="">All routes</option></select>
     <select id="f-type"><option value="STORE">Stores</option><option value="">Everything</option><option value="VAN">Vans</option><option value="WAREHOUSE">Warehouses</option></select>
     <select id="f-empty"><option value="stock">With stock</option><option value="all">Empty locations too</option></select>
+    <button class="btn quiet small" id="expand-all">Expand all</button>
     <button class="btn quiet small" data-csv="stores">Download CSV</button>
+    <button class="btn quiet small" data-csv="stores-sku">CSV by SKU</button>
   </div>
   <div class="wrap"><table id="t-stores"><thead><tr>
     <th data-k="store">Store</th><th data-k="name">Name</th><th data-k="route">Route</th><th data-k="merch">Merchandiser</th>
@@ -113,8 +137,25 @@ footer{color:var(--ink-3);font-size:12px;padding:10px 20px 30px;max-width:1100px
 </section>
 
 <section>
+  <h2 class="sec">Daily activity</h2>
+  <p class="note">Everything recorded on one day, by merchandiser. Arizona time. Click a stop to see its SKUs.</p>
+  <div class="daybar">
+    <button class="btn quiet small" id="d-prev" title="Day before">‹</button>
+    <input type="date" id="d-date">
+    <button class="btn quiet small" id="d-next" title="Day after">›</button>
+    <button class="btn quiet small" id="d-today">Today</button>
+    <h3 id="d-title"></h3>
+    <select id="d-type"><option value="">All activity</option><option value="DROP">Drops</option><option value="LOAD">Loads and returns</option><option value="COUNT">Counts</option><option value="OTHER">Everything else</option></select>
+    <button class="btn quiet small" data-csv="day">Download CSV</button>
+  </div>
+  <div class="tiles" id="d-tiles"></div>
+  <div id="d-body"></div>
+</section>
+
+<section>
   <h2 class="sec">Shrink and variance</h2>
   <p class="note">What counts have adjusted away since the ledger opened. Negative means the count came up short of the book.</p>
+  <div id="shrink-opening"></div>
   <div id="shrink-chart" class="chart"></div>
   <div class="bar">
     <select id="f-shrink"><option value="store">By store</option><option value="route">By route</option><option value="sku">By SKU</option></select>
